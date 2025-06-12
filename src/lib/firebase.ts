@@ -29,8 +29,6 @@ try {
     app = getApp();
   }
 } catch (error) {
-  // This catch block handles errors during the initializeApp call itself.
-  // These could be due to malformed config beyond just the API key (e.g., invalid projectId format).
   console.error("Firebase initialization error:", error);
   let errorMessage = 'Failed to initialize Firebase app. Please double-check your Firebase project configuration and ensure all `NEXT_PUBLIC_` environment variables (like NEXT_PUBLIC_FIREBASE_PROJECT_ID) are correctly set in your .env.local file.';
   if (error instanceof Error && error.message) {
