@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -19,16 +20,38 @@ import { format } from 'date-fns';
 const temperatureSchema = z.object({
   date: z.date({ required_error: 'Date is required.' }),
   morningTemperature: z.preprocess(
-    (val) => (val === "" ? null : parseFloat(String(val))),
+    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
+    z.number().min(-50).max(50).nullable()
+  ),
+  morningMinTemperature: z.preprocess(
+    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
+    z.number().min(-50).max(50).nullable()
+  ),
+  morningMaxTemperature: z.preprocess(
+    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
     z.number().min(-50).max(50).nullable()
   ),
   eveningTemperature: z.preprocess(
-    (val) => (val === "" ? null : parseFloat(String(val))),
+    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
+    z.number().min(-50).max(50).nullable()
+  ),
+  eveningMinTemperature: z.preprocess(
+    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
+    z.number().min(-50).max(50).nullable()
+  ),
+  eveningMaxTemperature: z.preprocess(
+    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
     z.number().min(-50).max(50).nullable()
   ),
 }).refine(data => data.morningTemperature !== null || data.eveningTemperature !== null, {
-  message: "At least one temperature reading (morning or evening) is required.",
-  path: ["morningTemperature"], // You can point to any field or a general one
+  message: "At least one primary temperature reading (morning or evening) is required.",
+  path: ["morningTemperature"],
+}).refine(data => (data.morningMinTemperature === null && data.morningMaxTemperature === null) || (data.morningMinTemperature !== null && data.morningMaxTemperature !== null && data.morningMinTemperature <= data.morningMaxTemperature) || (data.morningMinTemperature !== null && data.morningMaxTemperature === null) || (data.morningMinTemperature === null && data.morningMaxTemperature !== null), {
+  message: "Morning Min temperature must be less than or equal to Morning Max temperature.",
+  path: ["morningMinTemperature"],
+}).refine(data => (data.eveningMinTemperature === null && data.eveningMaxTemperature === null) || (data.eveningMinTemperature !== null && data.eveningMaxTemperature !== null && data.eveningMinTemperature <= data.eveningMaxTemperature) || (data.eveningMinTemperature !== null && data.eveningMaxTemperature === null) || (data.eveningMinTemperature === null && data.eveningMaxTemperature !== null) , {
+  message: "Evening Min temperature must be less than or equal to Evening Max temperature.",
+  path: ["eveningMinTemperature"],
 });
 
 type TemperatureFormData = z.infer<typeof temperatureSchema>;
@@ -47,7 +70,11 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
     defaultValues: {
       date: new Date(),
       morningTemperature: null,
+      morningMinTemperature: null,
+      morningMaxTemperature: null,
       eveningTemperature: null,
+      eveningMinTemperature: null,
+      eveningMaxTemperature: null,
     },
   });
 
@@ -62,7 +89,11 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
         currentUser.uid,
         data.date,
         data.morningTemperature,
-        data.eveningTemperature
+        data.morningMinTemperature,
+        data.morningMaxTemperature,
+        data.eveningTemperature,
+        data.eveningMinTemperature,
+        data.eveningMaxTemperature
       );
       toast({ title: 'Success', description: 'Temperature log added successfully.' });
       reset(); // Reset form to default values
@@ -85,74 +116,121 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
           <PlusCircle className="mr-2 h-6 w-6 text-primary" />
           Add New Temperature Log
         </CardTitle>
-        <CardDescription>Enter your morning and/or evening temperature for a specific date.</CardDescription>
+        <CardDescription>Enter your temperature readings for a specific date. Min/Max are optional.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            <div className="space-y-2">
-              <Label htmlFor="date">Date</Label>
-              <Controller
-                name="date"
-                control={control}
-                render={({ field }) => (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        initialFocus
-                        disabled={(date) => date > new Date() || date < new Date("2000-01-01")}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                )}
-              />
-              {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="date">Date</Label>
+            <Controller
+              name="date"
+              control={control}
+              render={({ field }) => (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className="w-full md:w-1/3 justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={field.onChange}
+                      initialFocus
+                      disabled={(date) => date > new Date() || date < new Date("2000-01-01")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              )}
+            />
+            {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="morningTemperature" className="flex items-center">
-                <ThermometerSun className="mr-2 h-4 w-4 text-orange-500" />
-                Morning Temp (°C)
-              </Label>
-              <Input
-                id="morningTemperature"
-                type="number"
-                step="0.1"
-                {...register('morningTemperature')}
-                placeholder="e.g. 36.5"
-              />
-              {errors.morningTemperature && <p className="text-sm text-destructive">{errors.morningTemperature.message}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="eveningTemperature" className="flex items-center">
-                <ThermometerSnowflake className="mr-2 h-4 w-4 text-blue-500" />
-                Evening Temp (°C)
-              </Label>
-              <Input
-                id="eveningTemperature"
-                type="number"
-                step="0.1"
-                {...register('eveningTemperature')}
-                placeholder="e.g. 37.0"
-              />
-              {errors.eveningTemperature && <p className="text-sm text-destructive">{errors.eveningTemperature.message}</p>}
+          <div className="space-y-4">
+            <p className="font-medium text-foreground flex items-center"><ThermometerSun className="mr-2 h-5 w-5 text-orange-500" /> Morning Readings</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="morningTemperature">Temperature (°C)</Label>
+                <Input
+                  id="morningTemperature"
+                  type="number"
+                  step="0.1"
+                  {...register('morningTemperature')}
+                  placeholder="e.g. 36.5"
+                />
+                {errors.morningTemperature && <p className="text-xs text-destructive mt-1">{errors.morningTemperature.message}</p>}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="morningMinTemperature">Min Temp (°C)</Label>
+                <Input
+                  id="morningMinTemperature"
+                  type="number"
+                  step="0.1"
+                  {...register('morningMinTemperature')}
+                  placeholder="e.g. 36.2"
+                />
+                {errors.morningMinTemperature && <p className="text-xs text-destructive mt-1">{errors.morningMinTemperature.message}</p>}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="morningMaxTemperature">Max Temp (°C)</Label>
+                <Input
+                  id="morningMaxTemperature"
+                  type="number"
+                  step="0.1"
+                  {...register('morningMaxTemperature')}
+                  placeholder="e.g. 36.8"
+                />
+                {errors.morningMaxTemperature && <p className="text-xs text-destructive mt-1">{errors.morningMaxTemperature.message}</p>}
+              </div>
             </div>
           </div>
+          
+          <div className="space-y-4">
+            <p className="font-medium text-foreground flex items-center"><ThermometerSnowflake className="mr-2 h-5 w-5 text-blue-500" /> Evening Readings</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+               <div className="space-y-1">
+                <Label htmlFor="eveningTemperature">Temperature (°C)</Label>
+                <Input
+                  id="eveningTemperature"
+                  type="number"
+                  step="0.1"
+                  {...register('eveningTemperature')}
+                  placeholder="e.g. 37.0"
+                />
+                {errors.eveningTemperature && <p className="text-xs text-destructive mt-1">{errors.eveningTemperature.message}</p>}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="eveningMinTemperature">Min Temp (°C)</Label>
+                <Input
+                  id="eveningMinTemperature"
+                  type="number"
+                  step="0.1"
+                  {...register('eveningMinTemperature')}
+                  placeholder="e.g. 36.8"
+                />
+                {errors.eveningMinTemperature && <p className="text-xs text-destructive mt-1">{errors.eveningMinTemperature.message}</p>}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="eveningMaxTemperature">Max Temp (°C)</Label>
+                <Input
+                  id="eveningMaxTemperature"
+                  type="number"
+                  step="0.1"
+                  {...register('eveningMaxTemperature')}
+                  placeholder="e.g. 37.2"
+                />
+                {errors.eveningMaxTemperature && <p className="text-xs text-destructive mt-1">{errors.eveningMaxTemperature.message}</p>}
+              </div>
+            </div>
+          </div>
+
           {(errors as any)._errors?.length > 0 && (
-             <p className="text-sm text-destructive">{(errors as any)._errors[0]}</p>
+             <p className="text-sm text-destructive">{(errors as any)._errors.join(', ')}</p>
           )}
 
           <Button type="submit" className="w-full md:w-auto" disabled={isLoading}>

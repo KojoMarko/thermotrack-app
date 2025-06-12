@@ -1,3 +1,4 @@
+
 import type { Timestamp } from 'firebase/firestore';
 
 export interface TemperatureLog {
@@ -5,7 +6,11 @@ export interface TemperatureLog {
   userId: string;
   date: Timestamp;
   morningTemperature: number | null;
+  morningMinTemperature: number | null;
+  morningMaxTemperature: number | null;
   eveningTemperature: number | null;
+  eveningMinTemperature: number | null;
+  eveningMaxTemperature: number | null;
   createdAt: Timestamp;
 }
 

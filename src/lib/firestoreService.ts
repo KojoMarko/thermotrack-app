@@ -1,5 +1,5 @@
 
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase'; // Removed auth as it's not used directly here
 import type { TemperatureLog, DeletedTemperatureLog } from '@/lib/types';
 import {
   collection,
@@ -13,6 +13,7 @@ import {
   Timestamp,
   writeBatch,
   serverTimestamp,
+  getDoc, // Added getDoc for fetching a single document
 } from 'firebase/firestore';
 import { startOfMonth, endOfMonth } from 'date-fns';
 
@@ -23,16 +24,24 @@ export const addTemperatureLog = async (
   userId: string,
   date: Date,
   morningTemperature: number | null,
-  eveningTemperature: number | null
+  morningMinTemperature: number | null,
+  morningMaxTemperature: number | null,
+  eveningTemperature: number | null,
+  eveningMinTemperature: number | null,
+  eveningMaxTemperature: number | null
 ): Promise<string> => {
-  if (!morningTemperature && !eveningTemperature) {
-    throw new Error("At least one temperature reading (morning or evening) is required.");
+  if (morningTemperature === null && eveningTemperature === null) {
+    throw new Error("At least one primary temperature reading (morning or evening) is required.");
   }
   const newLogRef = await addDoc(getTemperaturesCollectionRef(userId), {
     userId,
     date: Timestamp.fromDate(date),
     morningTemperature,
+    morningMinTemperature,
+    morningMaxTemperature,
     eveningTemperature,
+    eveningMinTemperature,
+    eveningMaxTemperature,
     createdAt: serverTimestamp(),
   });
   return newLogRef.id;
@@ -60,16 +69,27 @@ export const getTemperatureLogsForMonth = async (userId: string, year: number, m
 
 export const deleteTemperatureLog = async (userId: string, logId: string): Promise<void> => {
   const logDocRef = doc(db, `users/${userId}/temperatures`, logId);
-  const logSnapshot = await getDocs(query(collection(db, `users/${userId}/temperatures`), where('__name__', '==', logId)));
+  // Fetch the specific document to ensure it exists and to get its data
+  const logDocSnap = await getDoc(logDocRef);
 
 
-  if (!logSnapshot.empty) {
-    const logData = logSnapshot.docs[0].data() as Omit<TemperatureLog, 'id'>;
+  if (logDocSnap.exists()) {
+    const logData = logDocSnap.data() as Omit<TemperatureLog, 'id'>; // Cast to the type, excluding id
     const batch = writeBatch(db);
 
-    const deletedLogRef = doc(getDeletedTemperaturesCollectionRef(userId));
+    const deletedLogRef = doc(getDeletedTemperaturesCollectionRef(userId)); // Auto-generate ID for deleted log
     batch.set(deletedLogRef, {
-      ...logData,
+      ...logData, // Spread the original log data
+      // Ensure all fields from TemperatureLog are explicitly handled or spread
+      date: logData.date, 
+      morningTemperature: logData.morningTemperature,
+      morningMinTemperature: logData.morningMinTemperature === undefined ? null : logData.morningMinTemperature,
+      morningMaxTemperature: logData.morningMaxTemperature === undefined ? null : logData.morningMaxTemperature,
+      eveningTemperature: logData.eveningTemperature,
+      eveningMinTemperature: logData.eveningMinTemperature === undefined ? null : logData.eveningMinTemperature,
+      eveningMaxTemperature: logData.eveningMaxTemperature === undefined ? null : logData.eveningMaxTemperature,
+      createdAt: logData.createdAt,
+      userId: logData.userId,
       deletedAt: serverTimestamp(),
       originalLogId: logId,
     });
