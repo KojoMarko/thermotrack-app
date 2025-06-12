@@ -14,26 +14,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { addTemperatureLog } from '@/lib/firestoreService';
-import { CalendarIcon, ThermometerSun, ThermometerSnowflake, PlusCircle } from 'lucide-react';
+import { CalendarIcon, Thermometer, PlusCircle } from 'lucide-react'; // Changed icons
 import { format } from 'date-fns';
 
 const temperatureSchema = z.object({
   date: z.date({ required_error: 'Date is required.' }),
   morningMinTemperature: z.preprocess(
-    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
-    z.number().min(-50).max(50).nullable()
+    (val) => (val === "" || val === undefined || Number.isNaN(parseFloat(String(val))) ? null : parseFloat(String(val))),
+    z.number().min(-50).max(100).nullable() // Adjusted max for fridge context
   ),
   morningMaxTemperature: z.preprocess(
-    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
-    z.number().min(-50).max(50).nullable()
+    (val) => (val === "" || val === undefined || Number.isNaN(parseFloat(String(val))) ? null : parseFloat(String(val))),
+    z.number().min(-50).max(100).nullable() // Adjusted max for fridge context
   ),
   eveningMinTemperature: z.preprocess(
-    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
-    z.number().min(-50).max(50).nullable()
+    (val) => (val === "" || val === undefined || Number.isNaN(parseFloat(String(val))) ? null : parseFloat(String(val))),
+    z.number().min(-50).max(100).nullable() // Adjusted max for fridge context
   ),
   eveningMaxTemperature: z.preprocess(
-    (val) => (val === "" || val === undefined ? null : parseFloat(String(val))),
-    z.number().min(-50).max(50).nullable()
+    (val) => (val === "" || val === undefined || Number.isNaN(parseFloat(String(val))) ? null : parseFloat(String(val))),
+    z.number().min(-50).max(100).nullable() // Adjusted max for fridge context
   ),
 })
 .refine(data => (data.morningMinTemperature !== null && data.morningMaxTemperature !== null) ? data.morningMinTemperature <= data.morningMaxTemperature : true, {
@@ -51,13 +51,13 @@ const temperatureSchema = z.object({
          data.eveningMaxTemperature !== null;
 }, {
   message: "At least one temperature reading (min or max, for morning or evening) is required.",
-  path: ["morningMinTemperature"], // Attaching to the first relevant field
+  path: ["morningMinTemperature"], // Attaching to the first relevant field to show a general error
 });
 
 type TemperatureFormData = z.infer<typeof temperatureSchema>;
 
 type TemperatureFormProps = {
-  onLogAdded: () => void; // Callback to refresh data on parent
+  onLogAdded: () => void;
 };
 
 export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
@@ -91,15 +91,17 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
 
   const onSubmit = async (data: TemperatureFormData) => {
     if (!currentUser) {
-      toast({ title: 'Error', description: 'You must be logged in.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'You must be logged in to add a log.', variant: 'destructive' });
       return;
     }
+
     setIsLoading(true);
 
     const calculatedMorningTemp = calculateAverageOrSingle(data.morningMinTemperature, data.morningMaxTemperature);
     const calculatedEveningTemp = calculateAverageOrSingle(data.eveningMinTemperature, data.eveningMaxTemperature);
 
     try {
+      console.log("[TemperatureForm] Attempting to add log with data:", data);
       await addTemperatureLog(
         currentUser.uid,
         data.date,
@@ -110,16 +112,18 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
         data.eveningMinTemperature,
         data.eveningMaxTemperature
       );
-      toast({ title: 'Success', description: 'Temperature log added successfully.' });
-      reset(); // Reset form to default values
-      onLogAdded(); // Notify parent component
+      toast({ title: 'Success!', description: 'Temperature log added successfully.' });
+      reset();
+      onLogAdded();
     } catch (error: any) {
+      console.error("[TemperatureForm] Error during form submission:", error);
       toast({
         title: 'Error Adding Log',
-        description: error.message || 'Could not save temperature log.',
+        description: error.message || 'Could not save temperature log. Please try again.',
         variant: 'destructive',
       });
     } finally {
+      console.log("[TemperatureForm] onSubmit finally block reached. Setting isLoading to false.");
       setIsLoading(false);
     }
   };
@@ -131,7 +135,7 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
           <PlusCircle className="mr-2 h-6 w-6 text-primary" />
           Add New Temperature Log
         </CardTitle>
-        <CardDescription>Enter your min/max temperature readings. The average will be calculated. At least one reading is required.</CardDescription>
+        <CardDescription>Enter your fridge's min/max temperature readings. The average will be calculated for display. At least one reading is required.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -167,7 +171,7 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
           </div>
 
           <div className="space-y-4">
-            <p className="font-medium text-foreground flex items-center"><ThermometerSun className="mr-2 h-5 w-5 text-orange-500" /> Morning Min/Max Readings</p>
+            <p className="font-medium text-foreground flex items-center"><Thermometer className="mr-2 h-5 w-5 text-orange-500" /> Morning Min/Max Readings</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="morningMinTemperature">Min Temp (°C)</Label>
@@ -176,9 +180,9 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
                   type="number"
                   step="0.1"
                   {...register('morningMinTemperature')}
-                  placeholder="e.g. 36.2"
+                  placeholder="e.g. 2.0"
                 />
-                {errors.morningMinTemperature && <p className="text-xs text-destructive mt-1">{errors.morningMinTemperature.message}</p>}
+                {(errors.morningMinTemperature || errors.morningMaxTemperature && errors.morningMinTemperature?.type === 'custom') && <p className="text-xs text-destructive mt-1">{errors.morningMinTemperature?.message}</p>}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="morningMaxTemperature">Max Temp (°C)</Label>
@@ -187,15 +191,15 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
                   type="number"
                   step="0.1"
                   {...register('morningMaxTemperature')}
-                  placeholder="e.g. 36.8"
+                  placeholder="e.g. 8.0"
                 />
-                {errors.morningMaxTemperature && <p className="text-xs text-destructive mt-1">{errors.morningMaxTemperature.message}</p>}
+                {errors.morningMaxTemperature && errors.morningMaxTemperature.type !== 'custom' && <p className="text-xs text-destructive mt-1">{errors.morningMaxTemperature.message}</p>}
               </div>
             </div>
           </div>
           
           <div className="space-y-4">
-            <p className="font-medium text-foreground flex items-center"><ThermometerSnowflake className="mr-2 h-5 w-5 text-blue-500" /> Evening Min/Max Readings</p>
+            <p className="font-medium text-foreground flex items-center"><Thermometer className="mr-2 h-5 w-5 text-blue-500" /> Evening Min/Max Readings</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div className="space-y-1">
                 <Label htmlFor="eveningMinTemperature">Min Temp (°C)</Label>
@@ -204,9 +208,9 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
                   type="number"
                   step="0.1"
                   {...register('eveningMinTemperature')}
-                  placeholder="e.g. 36.8"
+                  placeholder="e.g. 2.5"
                 />
-                {errors.eveningMinTemperature && <p className="text-xs text-destructive mt-1">{errors.eveningMinTemperature.message}</p>}
+                {(errors.eveningMinTemperature || errors.eveningMaxTemperature && errors.eveningMinTemperature?.type === 'custom') && <p className="text-xs text-destructive mt-1">{errors.eveningMinTemperature?.message}</p>}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="eveningMaxTemperature">Max Temp (°C)</Label>
@@ -215,16 +219,18 @@ export default function TemperatureForm({ onLogAdded }: TemperatureFormProps) {
                   type="number"
                   step="0.1"
                   {...register('eveningMaxTemperature')}
-                  placeholder="e.g. 37.2"
+                  placeholder="e.g. 7.5"
                 />
-                {errors.eveningMaxTemperature && <p className="text-xs text-destructive mt-1">{errors.eveningMaxTemperature.message}</p>}
+                 {errors.eveningMaxTemperature && errors.eveningMaxTemperature.type !== 'custom' && <p className="text-xs text-destructive mt-1">{errors.eveningMaxTemperature.message}</p>}
               </div>
             </div>
           </div>
 
-          {(errors as any).root && <p className="text-sm text-destructive">{(errors as any).root.message}</p>}
-          {(errors as any)._errors?.length > 0 && ( // Fallback for general Zod errors not caught by field paths
-             <p className="text-sm text-destructive">{(errors as any)._errors.join(', ')}</p>
+          {errors.morningMinTemperature && (errors.morningMinTemperature.message?.includes("At least one temperature reading") || errors.morningMinTemperature.message?.includes("Morning Min temperature must be less than")) && (
+             <p className="text-sm text-destructive mt-2">{errors.morningMinTemperature.message}</p>
+          )}
+           {errors.eveningMinTemperature && errors.eveningMinTemperature.message?.includes("Evening Min temperature must be less than") && (
+             <p className="text-sm text-destructive mt-2">{errors.eveningMinTemperature.message}</p>
           )}
 
 
