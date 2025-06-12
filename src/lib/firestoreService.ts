@@ -1,3 +1,4 @@
+
 import { db, auth } from '@/lib/firebase';
 import type { TemperatureLog, DeletedTemperatureLog } from '@/lib/types';
 import {
@@ -12,9 +13,8 @@ import {
   Timestamp,
   writeBatch,
   serverTimestamp,
-  startOfMonth,
-  endOfMonth,
 } from 'firebase/firestore';
+import { startOfMonth, endOfMonth } from 'date-fns';
 
 const getTemperaturesCollectionRef = (userId: string) => collection(db, `users/${userId}/temperatures`);
 const getDeletedTemperaturesCollectionRef = (userId: string) => collection(db, `users/${userId}/deletedTemperatures`);
