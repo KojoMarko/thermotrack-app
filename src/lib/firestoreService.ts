@@ -96,7 +96,7 @@ export const addTemperatureLog = async (
     console.error("[firestoreService] Error in addTemperatureLog:", error);
     // Ensure the error is re-thrown so the form's catch block can handle it
     if (error instanceof Error) {
-      throw error; 
+      throw error;
     } else {
       throw new Error(String(error || "An unknown error occurred during log addition."));
     }
@@ -105,8 +105,8 @@ export const addTemperatureLog = async (
 
 export const getTemperatureLogsForMonth = async (userId: string, year: number, month: number): Promise<TemperatureLog[]> => {
   const monthDate = new Date(year, month -1, 1); // month is 1-indexed
-  const startDate = startOfDay(startOfMonth(monthDate)); 
-  const endDate = endOfDay(endOfMonth(monthDate));     
+  const startDate = startOfDay(startOfMonth(monthDate));
+  const endDate = endOfDay(endOfMonth(monthDate));
 
   console.log(`[firestoreService] Fetching logs for ${userId} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
@@ -185,3 +185,4 @@ export const getAllTemperatureLogs = async (userId: string): Promise<Temperature
     ...docSnap.data(),
   } as TemperatureLog));
 };
+
