@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -69,8 +70,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-3xl font-headline font-semibold mb-2">Your Temperature Dashboard</h2>
-        <p className="text-muted-foreground">Track, analyze, and gain insights from your daily temperature readings.</p>
+        <h2 className="text-3xl font-headline font-semibold mb-2">Refrigerator Temperature Dashboard</h2>
+        <p className="text-muted-foreground">Track, analyze, and gain insights from your daily fridge temperature readings.</p>
       </div>
 
       <TemperatureForm onLogAdded={fetchLogs} />
@@ -125,15 +126,20 @@ export default function DashboardPage() {
          <ReportButton 
             reportContentRef={reportContentRef} 
             reportFileName={`ThermoTrack_Report_${selectedMonthName}_${selectedYear}.pdf`}
-            reportTitle={`ThermoTrack Report - ${selectedMonthName} ${selectedYear}`}
+            reportTitle={`ThermoTrack Fridge Report - ${selectedMonthName} ${selectedYear}`}
           />
         </div>
       )}
 
       <TemperatureTable logs={logs} onLogDeleted={fetchLogs} isLoading={isLoading} />
       
-      <AIInsights monthlyLogs={logs} />
+      <AIInsights 
+        monthlyLogs={logs} 
+        monthName={selectedMonthName} 
+        year={parseInt(selectedYear, 10)} 
+      />
 
     </div>
   );
 }
+
