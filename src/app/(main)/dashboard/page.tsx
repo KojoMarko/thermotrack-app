@@ -10,14 +10,12 @@ import TemperatureChart from '@/components/thermo/TemperatureChart';
 import ReportButton from '@/components/thermo/ReportButton';
 import AIInsights from '@/components/thermo/AIInsights';
 import { getTemperatureLogsForMonth } from '@/lib/firestoreService';
-import type { TemperatureLog } from '@/lib/types';
+import type { TemperatureLog, AggregatedDailyLog } from '@/lib/types'; // Import AggregatedDailyLog
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { format, getYear, getMonth, subMonths, addMonths } from 'date-fns';
+import { format, getYear, getMonth, subMonths, addMonths, startOfDay, endOfDay, parseISO, isValid } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const currentYear = getYear(new Date());
@@ -27,10 +25,16 @@ const months = Array.from({ length: 12 }, (_, i) => ({
   label: format(new Date(currentYear, i, 1), 'MMMM'),
 }));
 
+interface DailyAggregateData {
+  date: string; // yyyy-MM-dd
+  morning: { count: number; sumAvg: number; minTemp: number; maxTemp: number; actualMin: number | null; actualMax: number | null };
+  evening: { count: number; sumAvg: number; minTemp: number; maxTemp: number; actualMin: number | null; actualMax: number | null };
+}
 
 export default function DashboardPage() {
   const { currentUser } = useAuth();
-  const [logs, setLogs] = useState<TemperatureLog[]>([]);
+  const [rawLogs, setRawLogs] = useState<TemperatureLog[]>([]);
+  const [aggregatedLogsForChart, setAggregatedLogsForChart] = useState<AggregatedDailyLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<string>((getMonth(new Date()) + 1).toString());
   const [selectedYear, setSelectedYear] = useState<string>(getYear(new Date()).toString());
@@ -38,6 +42,67 @@ export default function DashboardPage() {
   const combinedChartRef = useRef<HTMLDivElement>(null);
   const morningPdfChartRef = useRef<HTMLDivElement>(null);
   const eveningPdfChartRef = useRef<HTMLDivElement>(null);
+
+  const processLogsForDisplay = useCallback((logsToProcess: TemperatureLog[]): AggregatedDailyLog[] => {
+    if (!logsToProcess || logsToProcess.length === 0) return [];
+
+    const dailyAggregatesMap: Record<string, DailyAggregateData> = {};
+
+    logsToProcess.forEach(log => {
+      if (!log.timestamp || typeof log.timestamp.toDate !== 'function') {
+        console.warn('[DashboardPage] processLogsForDisplay: Skipping log with invalid timestamp:', log);
+        return;
+      }
+      const logDate = log.timestamp.toDate();
+      const dayKey = format(logDate, 'yyyy-MM-dd');
+
+      if (!dailyAggregatesMap[dayKey]) {
+        dailyAggregatesMap[dayKey] = {
+          date: dayKey,
+          morning: { count: 0, sumAvg: 0, minTemp: Infinity, maxTemp: -Infinity, actualMin: null, actualMax: null },
+          evening: { count: 0, sumAvg: 0, minTemp: Infinity, maxTemp: -Infinity, actualMin: null, actualMax: null },
+        };
+      }
+
+      const targetPeriod = log.period === 'morning' ? dailyAggregatesMap[dayKey].morning : dailyAggregatesMap[dayKey].evening;
+
+      if (log.period === 'morning' || log.period === 'evening') {
+        if (log.averageTemperature !== null) {
+          targetPeriod.sumAvg += log.averageTemperature;
+          targetPeriod.count++;
+        }
+        if (log.minTemperature !== null) {
+          targetPeriod.minTemp = Math.min(targetPeriod.minTemp, log.minTemperature);
+          targetPeriod.actualMin = targetPeriod.actualMin === null ? log.minTemperature : Math.min(targetPeriod.actualMin, log.minTemperature);
+        }
+        if (log.maxTemperature !== null) {
+          targetPeriod.maxTemp = Math.max(targetPeriod.maxTemp, log.maxTemperature);
+          targetPeriod.actualMax = targetPeriod.actualMax === null ? log.maxTemperature : Math.max(targetPeriod.actualMax, log.maxTemperature);
+        }
+      }
+    });
+
+    const chartLogs: AggregatedDailyLog[] = Object.values(dailyAggregatesMap)
+      .map(dayData => {
+        const jsDate = parseISO(dayData.date);
+         if (!isValid(jsDate)) {
+          console.warn("Invalid date encountered in dailyAggregatesMap:", dayData.date);
+          return null; 
+        }
+        return {
+            date: jsDate,
+            morningTemperature: dayData.morning.count > 0 ? parseFloat((dayData.morning.sumAvg / dayData.morning.count).toFixed(1)) : null,
+            morningMinTemperature: dayData.morning.actualMin === Infinity || dayData.morning.actualMin === -Infinity ? null : dayData.morning.actualMin,
+            morningMaxTemperature: dayData.morning.actualMax === Infinity || dayData.morning.actualMax === -Infinity ? null : dayData.morning.actualMax,
+            eveningTemperature: dayData.evening.count > 0 ? parseFloat((dayData.evening.sumAvg / dayData.evening.count).toFixed(1)) : null,
+            eveningMinTemperature: dayData.evening.actualMin === Infinity || dayData.evening.actualMin === -Infinity ? null : dayData.evening.actualMin,
+            eveningMaxTemperature: dayData.evening.actualMax === Infinity || dayData.evening.actualMax === -Infinity ? null : dayData.evening.actualMax,
+        };
+      })
+      .filter(log => log !== null) as AggregatedDailyLog[];
+      
+    return chartLogs.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, []);
 
 
   const fetchLogs = useCallback(async () => {
@@ -47,14 +112,16 @@ export default function DashboardPage() {
         const yearNum = parseInt(selectedYear, 10);
         const monthNum = parseInt(selectedMonth, 10);
         const fetchedLogs = await getTemperatureLogsForMonth(currentUser.uid, yearNum, monthNum);
-        setLogs(fetchedLogs);
+        setRawLogs(fetchedLogs);
+        const processedForChart = processLogsForDisplay(fetchedLogs);
+        setAggregatedLogsForChart(processedForChart);
       } catch (error) {
         console.error("Error fetching logs:", error);
       } finally {
         setIsLoading(false);
       }
     }
-  }, [currentUser, selectedMonth, selectedYear]);
+  }, [currentUser, selectedMonth, selectedYear, processLogsForDisplay]);
 
   useEffect(() => {
     fetchLogs();
@@ -121,24 +188,23 @@ export default function DashboardPage() {
             <div className="flex justify-center items-center h-64"><LoadingSpinner size={32}/></div>
           ) : (
             <div className="space-y-6 bg-background p-0 sm:p-4 rounded-md">
-              <MonthlySummary logs={logs} />
+              <MonthlySummary logs={aggregatedLogsForChart} />
               <div ref={combinedChartRef} className="bg-card p-2 rounded-md">
-                <TemperatureChart logs={logs} monthName={selectedMonthName} year={parseInt(selectedYear)} displayMode="combined" />
+                <TemperatureChart logs={aggregatedLogsForChart} monthName={selectedMonthName} year={parseInt(selectedYear)} displayMode="combined" />
               </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Hidden charts for PDF generation */}
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1000px', height: '600px', backgroundColor: 'white' }} ref={morningPdfChartRef}>
-          <TemperatureChart logs={logs} monthName={selectedMonthName} year={parseInt(selectedYear)} displayMode="morningDetails" chartTitle={`Morning Temperature Detail - ${selectedMonthName} ${selectedYear}`}/>
+          <TemperatureChart logs={aggregatedLogsForChart} monthName={selectedMonthName} year={parseInt(selectedYear)} displayMode="morningDetails" chartTitle={`Morning Temperature Detail - ${selectedMonthName} ${selectedYear}`}/>
       </div>
       <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1000px', height: '600px', backgroundColor: 'white' }} ref={eveningPdfChartRef}>
-          <TemperatureChart logs={logs} monthName={selectedMonthName} year={parseInt(selectedYear)} displayMode="eveningDetails" chartTitle={`Evening Temperature Detail - ${selectedMonthName} ${selectedYear}`}/>
+          <TemperatureChart logs={aggregatedLogsForChart} monthName={selectedMonthName} year={parseInt(selectedYear)} displayMode="eveningDetails" chartTitle={`Evening Temperature Detail - ${selectedMonthName} ${selectedYear}`}/>
       </div>
 
-      {!isLoading && logs.length > 0 && (
+      {!isLoading && rawLogs.length > 0 && (
         <div className="mt-6 flex justify-end">
          <ReportButton
             chartsToPrint={chartConfigsForPdf}
@@ -147,10 +213,10 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <TemperatureTable logs={logs} onLogDeleted={fetchLogs} isLoading={isLoading} />
+      <TemperatureTable logs={rawLogs} onLogDeleted={fetchLogs} isLoading={isLoading} />
 
       <AIInsights
-        monthlyLogs={logs}
+        monthlyLogs={rawLogs}
         monthName={selectedMonthName}
         year={parseInt(selectedYear, 10)}
       />

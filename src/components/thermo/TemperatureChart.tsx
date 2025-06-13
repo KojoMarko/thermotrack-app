@@ -1,16 +1,16 @@
 
 'use client';
 
-import type { TemperatureLog } from '@/lib/types';
+import type { AggregatedDailyLog } from '@/lib/types'; // Import the new type
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 import { LineChart, CartesianGrid, XAxis, YAxis, Line, Label } from 'recharts';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { TrendingUp } from 'lucide-react';
 
 type ChartDataType = {
-  date: string;
-  fullDate: string;
+  date: string; // Formatted day of month 'dd'
+  fullDate: string; // Formatted full date 'MMM dd, yyyy'
   morningAvg: number | null;
   morningMin: number | null;
   morningMax: number | null;
@@ -20,11 +20,11 @@ type ChartDataType = {
 };
 
 type TemperatureChartProps = {
-  logs: TemperatureLog[];
+  logs: AggregatedDailyLog[]; // Use AggregatedDailyLog[] for the logs prop
   monthName: string;
   year: number;
   displayMode?: 'combined' | 'morningDetails' | 'eveningDetails';
-  chartTitle?: string; // Optional prop for custom title, useful for PDF
+  chartTitle?: string;
 };
 
 const chartConfigBase = {
@@ -34,12 +34,12 @@ const chartConfigBase = {
   },
   morningMin: {
     label: "Morning Min (°C)",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(var(--chart-1))", // Can use a lighter shade or different style
     strokeDasharray: "3 3",
   },
   morningMax: {
     label: "Morning Max (°C)",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(var(--chart-1))", // Can use a lighter shade or different style
     strokeDasharray: "3 3",
   },
   eveningAvg: {
@@ -48,12 +48,12 @@ const chartConfigBase = {
   },
   eveningMin: {
     label: "Evening Min (°C)",
-    color: "hsl(var(--chart-2))",
+    color: "hsl(var(--chart-2))", // Can use a lighter shade or different style
     strokeDasharray: "3 3",
   },
   eveningMax: {
     label: "Evening Max (°C)",
-    color: "hsl(var(--chart-2))",
+    color: "hsl(var(--chart-2))", // Can use a lighter shade or different style
     strokeDasharray: "3 3",
   },
 } satisfies import('@/components/ui/chart').ChartConfig;
@@ -66,16 +66,28 @@ export default function TemperatureChart({
   displayMode = 'combined',
   chartTitle
 }: TemperatureChartProps) {
-  const chartData: ChartDataType[] = logs.map(log => ({
-    date: format(log.date.toDate(), 'dd'),
-    fullDate: format(log.date.toDate(), 'MMM dd, yyyy'),
-    morningAvg: log.morningTemperature,
-    morningMin: log.morningMinTemperature,
-    morningMax: log.morningMaxTemperature,
-    eveningAvg: log.eveningTemperature,
-    eveningMin: log.eveningMinTemperature,
-    eveningMax: log.eveningMaxTemperature,
-  }));
+  const chartData: ChartDataType[] = logs.map(log => {
+    // log.date is now a JavaScript Date object from AggregatedDailyLog
+    if (!log.date || !(log.date instanceof Date) || !isValid(log.date)) {
+      console.warn("Invalid date object in logs for chart:", log);
+      return { // Provide a default structure to avoid crashes
+        date: 'N/A',
+        fullDate: 'Invalid Date',
+        morningAvg: null, morningMin: null, morningMax: null,
+        eveningAvg: null, eveningMin: null, eveningMax: null,
+      };
+    }
+    return {
+      date: format(log.date, 'dd'), // No .toDate() needed
+      fullDate: format(log.date, 'MMM dd, yyyy'), // No .toDate() needed
+      morningAvg: log.morningTemperature,
+      morningMin: log.morningMinTemperature,
+      morningMax: log.morningMaxTemperature,
+      eveningAvg: log.eveningTemperature,
+      eveningMin: log.eveningMinTemperature,
+      eveningMax: log.eveningMaxTemperature,
+    };
+  });
 
   const currentChartConfig: import('@/components/ui/chart').ChartConfig = {};
   if (displayMode === 'combined') {
@@ -91,12 +103,11 @@ export default function TemperatureChart({
     currentChartConfig.eveningMax = chartConfigBase.eveningMax;
   }
 
-  const hasData = logs.some(log => {
-    if (displayMode === 'combined') return log.morningTemperature !== null || log.eveningTemperature !== null;
-    if (displayMode === 'morningDetails') return log.morningTemperature !== null || log.morningMinTemperature !== null || log.morningMaxTemperature !== null;
-    if (displayMode === 'eveningDetails') return log.eveningTemperature !== null || log.eveningMinTemperature !== null || log.eveningMaxTemperature !== null;
-    return false;
-  });
+  const hasData = chartData.some(d => 
+    (displayMode === 'combined' && (d.morningAvg !== null || d.eveningAvg !== null)) ||
+    (displayMode === 'morningDetails' && (d.morningAvg !== null || d.morningMin !== null || d.morningMax !== null)) ||
+    (displayMode === 'eveningDetails' && (d.eveningAvg !== null || d.eveningMin !== null || d.eveningMax !== null))
+  );
 
   const title = chartTitle || `Temperature Trends - ${monthName} ${year}${displayMode !== 'combined' ? (displayMode === 'morningDetails' ? ' (Morning)' : ' (Evening)') : ''}`;
 
@@ -119,7 +130,7 @@ export default function TemperatureChart({
             <LineChart
               accessibilityLayer
               data={chartData}
-              margin={{ top: 5, right: 30, left: 20, bottom: 25 }} // Adjusted margins for labels
+              margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#cccccc" vertical={true} horizontal={true} />
               <XAxis
@@ -187,4 +198,3 @@ export default function TemperatureChart({
     </Card>
   );
 }
-
