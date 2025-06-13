@@ -5,7 +5,7 @@ import React from 'react';
 import type { TemperatureLog } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Trash2, User, Thermometer, CalendarDays } from 'lucide-react';
+import { Trash2, User, Thermometer, CalendarDays, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -29,7 +29,10 @@ type TemperatureTableProps = {
 };
 
 const formatTempWithRange = (temp: number | null, minTemp: number | null, maxTemp: number | null) => {
-  if (temp === null) return '-';
+  if (temp === null && minTemp === null && maxTemp === null) return '-';
+  
+  let displayTemp = temp !== null ? `${temp.toFixed(1)}°C` : '';
+  
   let rangeString = '';
   if (minTemp !== null && maxTemp !== null) {
     rangeString = ` (Min: ${minTemp.toFixed(1)}, Max: ${maxTemp.toFixed(1)})`;
@@ -38,7 +41,17 @@ const formatTempWithRange = (temp: number | null, minTemp: number | null, maxTem
   } else if (maxTemp !== null) {
     rangeString = ` (Max: ${maxTemp.toFixed(1)})`;
   }
-  return `${temp.toFixed(1)}${rangeString}`;
+  
+  if (displayTemp && rangeString) {
+    return `${displayTemp}${rangeString}`;
+  } else if (displayTemp) {
+    return displayTemp;
+  } else if (rangeString) {
+    // If only min/max are available, display that.
+    // Remove leading space if displayTemp is empty.
+    return rangeString.trimStart();
+  }
+  return '-'; // Fallback if all are null (though covered by first check)
 };
 
 export default function TemperatureTable({ logs, onLogDeleted, isLoading }: TemperatureTableProps) {
@@ -68,9 +81,9 @@ export default function TemperatureTable({ logs, onLogDeleted, isLoading }: Temp
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[150px]"><CalendarDays className="inline-block mr-1 h-4 w-4"/>Date</TableHead>
-            <TableHead className="text-center"><Thermometer className="inline-block mr-1 h-4 w-4 text-orange-500"/>Morning (°C)</TableHead>
-            <TableHead className="text-center"><Thermometer className="inline-block mr-1 h-4 w-4 text-blue-500"/>Evening (°C)</TableHead>
+            <TableHead className="w-[180px]"><CalendarDays className="inline-block mr-1 h-4 w-4"/>Date & Time</TableHead>
+            <TableHead className="text-center"><Clock className="inline-block mr-1 h-4 w-4"/>Period</TableHead>
+            <TableHead className="text-center"><Thermometer className="inline-block mr-1 h-4 w-4"/>Reading (°C)</TableHead>
             <TableHead><User className="inline-block mr-1 h-4 w-4"/>Added By</TableHead>
             <TableHead className="text-right w-[100px]">Actions</TableHead>
           </TableRow>
@@ -85,12 +98,12 @@ export default function TemperatureTable({ logs, onLogDeleted, isLoading }: Temp
           ) : (
             logs.map((log) => (
               <TableRow key={log.id}>
-                <TableCell className="font-medium">{format(log.date.toDate(), 'MMM dd, yyyy')}</TableCell>
-                <TableCell className="text-center">
-                  {formatTempWithRange(log.morningTemperature, log.morningMinTemperature, log.morningMaxTemperature)}
+                <TableCell className="font-medium">
+                  {log.timestamp ? format(log.timestamp.toDate(), 'MMM dd, yyyy HH:mm') : 'N/A'}
                 </TableCell>
+                <TableCell className="text-center capitalize">{log.period}</TableCell>
                 <TableCell className="text-center">
-                  {formatTempWithRange(log.eveningTemperature, log.eveningMinTemperature, log.eveningMaxTemperature)}
+                  {formatTempWithRange(log.averageTemperature, log.minTemperature, log.maxTemperature)}
                 </TableCell>
                 <TableCell>{log.addedByUserName || log.addedByUserId}</TableCell>
                 <TableCell className="text-right space-x-1">
