@@ -8,19 +8,23 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useToast } from '@/hooks/use-toast';
 
-type ReportButtonProps = {
-  reportContentRef: React.RefObject<HTMLElement>;
-  reportFileName?: string;
-  reportTitle?: string;
+type ChartConfigForPdf = {
+  chartRef: React.RefObject<HTMLElement>;
+  title: string;
 };
 
-export default function ReportButton({ reportContentRef, reportFileName = 'thermo-track-report.pdf', reportTitle = "ThermoTrack Report" }: ReportButtonProps) {
+type ReportButtonProps = {
+  chartsToPrint: ChartConfigForPdf[];
+  reportFileName?: string;
+};
+
+export default function ReportButton({ chartsToPrint, reportFileName = 'thermo-track-report.pdf' }: ReportButtonProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
 
   const handleGenerateReport = async () => {
-    if (!reportContentRef.current) {
-      toast({ title: 'Error', description: 'Report content not found.', variant: 'destructive' });
+    if (!chartsToPrint || chartsToPrint.length === 0 || !chartsToPrint.every(c => c.chartRef.current)) {
+      toast({ title: 'Error', description: 'Report content not found or not ready.', variant: 'destructive' });
       return;
     }
 
@@ -28,52 +32,63 @@ export default function ReportButton({ reportContentRef, reportFileName = 'therm
     toast({ title: 'Generating Report...', description: 'Please wait while your PDF is being created.' });
 
     try {
-      const originalScrollX = window.scrollX;
-      const originalScrollY = window.scrollY;
-      window.scrollTo(0, 0);
-
-      const canvas = await html2canvas(reportContentRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: true, // Enable html2canvas logging for more detailed console output
-        backgroundColor: '#FFFFFF', // Use a static white background
-        // Removed onclone manipulation of background to simplify
-      });
-      
-      window.scrollTo(originalScrollX, originalScrollY);
-
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'pt',
         format: 'a4',
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgWidth = imgProps.width;
-      const imgHeight = imgProps.height;
+      for (let i = 0; i < chartsToPrint.length; i++) {
+        const chartConfig = chartsToPrint[i];
+        if (!chartConfig.chartRef.current) continue;
 
-      const margin = 40; 
-      let newImgWidth = pdfWidth - 2 * margin;
-      let newImgHeight = (imgHeight * newImgWidth) / imgWidth;
+        // Temporarily ensure the chart is "visible" for html2canvas if it was off-screen
+        // This might involve more complex state management if charts are truly display:none
+        // For now, assuming off-screen positioning (left: -9999px) is sufficient.
 
-      if (newImgHeight > pdfHeight - 2 * margin - 30) { // -30 for title space
-        newImgHeight = pdfHeight - 2 * margin - 30;
-        newImgWidth = (imgWidth * newImgHeight) / imgHeight;
+        const originalScrollX = window.scrollX;
+        const originalScrollY = window.scrollY;
+        window.scrollTo(0, 0); // Scroll to top for consistent capture, though less critical for off-screen elements
+
+        const canvas = await html2canvas(chartConfig.chartRef.current, {
+          scale: 1.5, // Adjusted scale for better quality in PDF
+          useCORS: true,
+          logging: false, 
+          backgroundColor: '#FFFFFF', 
+          width: chartConfig.chartRef.current.offsetWidth, // Use actual width of the off-screen element
+          height: chartConfig.chartRef.current.offsetHeight, // Use actual height
+        });
+
+        window.scrollTo(originalScrollX, originalScrollY);
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const margin = 40;
+        
+        let imgReportWidth = pdfWidth - 2 * margin;
+        let imgReportHeight = (canvas.height * imgReportWidth) / canvas.width;
+
+        if (imgReportHeight > pdfHeight - 2 * margin - 30) { // -30 for title
+            imgReportHeight = pdfHeight - 2 * margin - 30;
+            imgReportWidth = (canvas.width * imgReportHeight) / canvas.height;
+        }
+
+        const x = (pdfWidth - imgReportWidth) / 2;
+        const y = margin + 30; // Leave space for title
+
+        if (i > 0) {
+          pdf.addPage('a4', 'landscape');
+        }
+
+        pdf.setFontSize(14);
+        pdf.text(chartConfig.title, pdfWidth / 2, margin + 10, { align: 'center' });
+        pdf.addImage(imgData, 'PNG', x, y, imgReportWidth, imgReportHeight);
       }
-      
-      const x = (pdfWidth - newImgWidth) / 2;
-      const y = margin + 20; // Top margin + space for title
 
-      pdf.setFontSize(16);
-      pdf.text(reportTitle, pdfWidth / 2, margin, { align: 'center' });
-      pdf.addImage(imgData, 'PNG', x, y, newImgWidth, newImgHeight);
       pdf.save(reportFileName);
-
       toast({ title: 'Report Generated', description: 'Your PDF report has been downloaded.' });
+
     } catch (error: any) {
       console.error("Error generating PDF:", error);
       toast({ title: 'Error Generating Report', description: error.message || 'Could not generate PDF.', variant: 'destructive' });
@@ -83,9 +98,10 @@ export default function ReportButton({ reportContentRef, reportFileName = 'therm
   };
 
   return (
-    <Button onClick={handleGenerateReport} disabled={isGenerating} className="w-full md:w-auto">
+    <Button onClick={handleGenerateReport} disabled={isGenerating || chartsToPrint.length === 0} className="w-full md:w-auto">
       <Download className="mr-2 h-4 w-4" />
-      {isGenerating ? 'Generating PDF...' : 'Download Chart (PDF)'}
+      {isGenerating ? 'Generating Report...' : 'Download Detailed Report (PDF)'}
     </Button>
   );
 }
+

@@ -21,9 +21,9 @@ import { format, getYear, getMonth, subMonths, addMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const currentYear = getYear(new Date());
-const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i); 
+const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
 const months = Array.from({ length: 12 }, (_, i) => ({
-  value: (i + 1).toString(), 
+  value: (i + 1).toString(),
   label: format(new Date(currentYear, i, 1), 'MMMM'),
 }));
 
@@ -34,8 +34,11 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<string>((getMonth(new Date()) + 1).toString());
   const [selectedYear, setSelectedYear] = useState<string>(getYear(new Date()).toString());
-  
-  const chartReportRef = useRef<HTMLDivElement>(null); // Ref specifically for the chart
+
+  const combinedChartRef = useRef<HTMLDivElement>(null);
+  const morningPdfChartRef = useRef<HTMLDivElement>(null);
+  const eveningPdfChartRef = useRef<HTMLDivElement>(null);
+
 
   const fetchLogs = useCallback(async () => {
     if (currentUser) {
@@ -63,8 +66,13 @@ export default function DashboardPage() {
     setSelectedYear(getYear(newDate).toString());
     setSelectedMonth((getMonth(newDate) + 1).toString());
   };
-  
+
   const selectedMonthName = months.find(m => m.value === selectedMonth)?.label || '';
+
+  const chartConfigsForPdf = [
+    { chartRef: morningPdfChartRef, title: `Morning Temperature Trends - ${selectedMonthName} ${selectedYear}` },
+    { chartRef: eveningPdfChartRef, title: `Evening Temperature Trends - ${selectedMonthName} ${selectedYear}` },
+  ];
 
   return (
     <div className="space-y-8">
@@ -108,36 +116,43 @@ export default function DashboardPage() {
               </Button>
             </div>
           </div>
-          
+
           {isLoading ? (
             <div className="flex justify-center items-center h-64"><LoadingSpinner size={32}/></div>
           ) : (
             <div className="space-y-6 bg-background p-0 sm:p-4 rounded-md">
               <MonthlySummary logs={logs} />
-              <div ref={chartReportRef} className="bg-card p-2 rounded-md"> {/* Ref for chart PDF capture */}
-                <TemperatureChart logs={logs} monthName={selectedMonthName} year={parseInt(selectedYear)} />
+              <div ref={combinedChartRef} className="bg-card p-2 rounded-md">
+                <TemperatureChart logs={logs} monthName={selectedMonthName} year={parseInt(selectedYear)} displayMode="combined" />
               </div>
             </div>
           )}
         </CardContent>
       </Card>
-      
+
+      {/* Hidden charts for PDF generation */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1000px', height: '600px', backgroundColor: 'white' }} ref={morningPdfChartRef}>
+          <TemperatureChart logs={logs} monthName={selectedMonthName} year={parseInt(selectedYear)} displayMode="morningDetails" chartTitle={`Morning Temperature Detail - ${selectedMonthName} ${selectedYear}`}/>
+      </div>
+      <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: '1000px', height: '600px', backgroundColor: 'white' }} ref={eveningPdfChartRef}>
+          <TemperatureChart logs={logs} monthName={selectedMonthName} year={parseInt(selectedYear)} displayMode="eveningDetails" chartTitle={`Evening Temperature Detail - ${selectedMonthName} ${selectedYear}`}/>
+      </div>
+
       {!isLoading && logs.length > 0 && (
         <div className="mt-6 flex justify-end">
-         <ReportButton 
-            reportContentRef={chartReportRef} 
-            reportFileName={`ThermoTrack_Chart_${selectedMonthName}_${selectedYear}.pdf`}
-            reportTitle={`Temperature Trend Chart - ${selectedMonthName} ${selectedYear}`}
+         <ReportButton
+            chartsToPrint={chartConfigsForPdf}
+            reportFileName={`ThermoTrack_Report_${selectedMonthName}_${selectedYear}.pdf`}
           />
         </div>
       )}
 
       <TemperatureTable logs={logs} onLogDeleted={fetchLogs} isLoading={isLoading} />
-      
-      <AIInsights 
-        monthlyLogs={logs} 
-        monthName={selectedMonthName} 
-        year={parseInt(selectedYear, 10)} 
+
+      <AIInsights
+        monthlyLogs={logs}
+        monthName={selectedMonthName}
+        year={parseInt(selectedYear, 10)}
       />
 
     </div>
