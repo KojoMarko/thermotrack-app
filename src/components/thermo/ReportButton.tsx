@@ -33,24 +33,18 @@ export default function ReportButton({ reportContentRef, reportFileName = 'therm
       window.scrollTo(0, 0);
 
       const canvas = await html2canvas(reportContentRef.current, {
-        scale: 2, 
+        scale: 2,
         useCORS: true,
-        logging: false,
-        backgroundColor: 'hsl(var(--card))', // Ensure background is captured if transparent
-        onclone: (document) => {
-            // Potentially apply styles for consistent PDF rendering if needed
-            const chartContainer = document.querySelector('.recharts-responsive-container');
-            if(chartContainer && chartContainer.parentElement) {
-                chartContainer.parentElement.style.backgroundColor = 'hsl(var(--card))';
-            }
-        }
+        logging: true, // Enable html2canvas logging for more detailed console output
+        backgroundColor: '#FFFFFF', // Use a static white background
+        // Removed onclone manipulation of background to simplify
       });
       
       window.scrollTo(originalScrollX, originalScrollY);
 
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
-        orientation: 'landscape', // Changed to landscape
+        orientation: 'landscape',
         unit: 'pt',
         format: 'a4',
       });
