@@ -21,9 +21,9 @@ import { format, getYear, getMonth, subMonths, addMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const currentYear = getYear(new Date());
-const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i); // Last 5 years, current year, next 4 years
+const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i); 
 const months = Array.from({ length: 12 }, (_, i) => ({
-  value: (i + 1).toString(), // 1-indexed for Firestore query
+  value: (i + 1).toString(), 
   label: format(new Date(currentYear, i, 1), 'MMMM'),
 }));
 
@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>((getMonth(new Date()) + 1).toString());
   const [selectedYear, setSelectedYear] = useState<string>(getYear(new Date()).toString());
   
-  const reportContentRef = useRef<HTMLDivElement>(null);
+  const chartReportRef = useRef<HTMLDivElement>(null); // Ref specifically for the chart
 
   const fetchLogs = useCallback(async () => {
     if (currentUser) {
@@ -47,7 +47,6 @@ export default function DashboardPage() {
         setLogs(fetchedLogs);
       } catch (error) {
         console.error("Error fetching logs:", error);
-        // Add toast notification for error
       } finally {
         setIsLoading(false);
       }
@@ -113,9 +112,11 @@ export default function DashboardPage() {
           {isLoading ? (
             <div className="flex justify-center items-center h-64"><LoadingSpinner size={32}/></div>
           ) : (
-            <div ref={reportContentRef} className="space-y-6 bg-background p-4 rounded-md"> {/* Added padding for PDF capture */}
+            <div className="space-y-6 bg-background p-0 sm:p-4 rounded-md">
               <MonthlySummary logs={logs} />
-              <TemperatureChart logs={logs} monthName={selectedMonthName} year={parseInt(selectedYear)} />
+              <div ref={chartReportRef} className="bg-card p-2 rounded-md"> {/* Ref for chart PDF capture */}
+                <TemperatureChart logs={logs} monthName={selectedMonthName} year={parseInt(selectedYear)} />
+              </div>
             </div>
           )}
         </CardContent>
@@ -124,9 +125,9 @@ export default function DashboardPage() {
       {!isLoading && logs.length > 0 && (
         <div className="mt-6 flex justify-end">
          <ReportButton 
-            reportContentRef={reportContentRef} 
-            reportFileName={`ThermoTrack_Report_${selectedMonthName}_${selectedYear}.pdf`}
-            reportTitle={`ThermoTrack Fridge Report - ${selectedMonthName} ${selectedYear}`}
+            reportContentRef={chartReportRef} 
+            reportFileName={`ThermoTrack_Chart_${selectedMonthName}_${selectedYear}.pdf`}
+            reportTitle={`Temperature Trend Chart - ${selectedMonthName} ${selectedYear}`}
           />
         </div>
       )}
@@ -142,4 +143,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

@@ -1,9 +1,10 @@
+
 'use client';
 
 import type { TemperatureLog } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
-import { LineChart, CartesianGrid, XAxis, YAxis, Line, Legend } from 'recharts';
+import { LineChart, CartesianGrid, XAxis, YAxis, Line } from 'recharts'; // Removed Legend import as ChartLegend is used
 import { format } from 'date-fns';
 import { TrendingUp } from 'lucide-react';
 
@@ -16,18 +17,18 @@ type TemperatureChartProps = {
 const chartConfig = {
   morning: {
     label: "Morning Temp (°C)",
-    color: "hsl(var(--chart-1))", // Uses primary color (Royal Blue)
+    color: "hsl(var(--chart-1))", 
   },
   evening: {
     label: "Evening Temp (°C)",
-    color: "hsl(var(--chart-2))", // Uses a distinct color (Coral-Orange like)
+    color: "hsl(var(--chart-2))", 
   },
 } satisfies import('@/components/ui/chart').ChartConfig;
 
 
 export default function TemperatureChart({ logs, monthName, year }: TemperatureChartProps) {
   const chartData = logs.map(log => ({
-    date: format(log.date.toDate(), 'dd'), // Day of the month
+    date: format(log.date.toDate(), 'dd'), 
     fullDate: format(log.date.toDate(), 'MMM dd, yyyy'),
     morning: log.morningTemperature,
     evening: log.eveningTemperature,
@@ -36,7 +37,7 @@ export default function TemperatureChart({ logs, monthName, year }: TemperatureC
   const hasData = logs.some(log => log.morningTemperature !== null || log.eveningTemperature !== null);
 
   return (
-    <Card className="shadow-lg">
+    <Card className="shadow-lg border-none"> {/* Removed border for cleaner PDF capture if parent has one */}
       <CardHeader>
         <CardTitle className="flex items-center text-xl">
             <TrendingUp className="mr-2 h-6 w-6 text-primary" />
@@ -46,29 +47,29 @@ export default function TemperatureChart({ logs, monthName, year }: TemperatureC
       </CardHeader>
       <CardContent>
         {hasData ? (
-          <ChartContainer config={chartConfig} className="h-[300px] w-full">
+          <ChartContainer config={chartConfig} className="h-[350px] sm:h-[400px] w-full"> {/* Increased height for landscape */}
             <LineChart
               accessibilityLayer
               data={chartData}
-              margin={{ top: 5, right: 20, left: -20, bottom: 5 }}
+              margin={{ top: 5, right: 30, left: 0, bottom: 5 }} // Adjusted margins for landscape
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" vertical={true} horizontal={true} /> {/* More visible grid */}
               <XAxis 
                 dataKey="date" 
                 tickLine={false} 
-                axisLine={false} 
+                axisLine={{stroke: "#a0a0a0"}}
                 tickMargin={8}
-                tickFormatter={(value) => value} // Displays day number
+                tickFormatter={(value) => value} 
               />
               <YAxis 
                 tickLine={false} 
-                axisLine={false} 
+                axisLine={{stroke: "#a0a0a0"}} 
                 tickMargin={8} 
-                domain={['dataMin - 1', 'dataMax + 1']} 
+                domain={['dataMin - 2', 'dataMax + 2']} // Adjusted domain for better spacing
                 tickFormatter={(value) => `${value}°C`}
               />
               <ChartTooltip
-                cursor={false}
+                cursor={true}
                 content={
                   <ChartTooltipContent
                     labelFormatter={(label, payload) => {
@@ -86,19 +87,19 @@ export default function TemperatureChart({ logs, monthName, year }: TemperatureC
                 dataKey="morning"
                 type="monotone"
                 stroke={chartConfig.morning.color}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 dot={{ r: 4, fill: chartConfig.morning.color }}
-                activeDot={{ r: 6 }}
-                name="Morning Temp (°C)"
+                activeDot={{ r: 7 }}
+                name={chartConfig.morning.label}
               />
               <Line
                 dataKey="evening"
                 type="monotone"
                 stroke={chartConfig.evening.color}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 dot={{ r: 4, fill: chartConfig.evening.color }}
-                activeDot={{ r: 6 }}
-                name="Evening Temp (°C)"
+                activeDot={{ r: 7 }}
+                name={chartConfig.evening.label}
               />
               <ChartLegend content={<ChartLegendContent />} />
             </LineChart>

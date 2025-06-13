@@ -16,7 +16,7 @@ import {
   getDoc,
   limit,
 } from 'firebase/firestore';
-import { startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns'; // Corrected import
+import { startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 
 const getTemperaturesCollectionRef = (userId: string) => collection(db, `users/${userId}/temperatures`);
 const getDeletedTemperaturesCollectionRef = (userId: string) => collection(db, `users/${userId}/deletedTemperatures`);
@@ -40,7 +40,6 @@ const checkExistingLogForDate = async (userId: string, date: Date): Promise<bool
     return !querySnapshot.empty;
   } catch (error) {
     console.error("[firestoreService] Error in checkExistingLogForDate while querying Firestore:", error);
-    // Rethrow to ensure the calling function's finally block is executed.
     if (error instanceof Error) {
         throw error;
     }
@@ -49,52 +48,59 @@ const checkExistingLogForDate = async (userId: string, date: Date): Promise<bool
 };
 
 export const addTemperatureLog = async (
-  userId: string,
+  ownerUserId: string, // ID of the user who owns the data/fridge
   date: Date,
   calculatedMorningTemp: number | null,
   morningMinTemperature: number | null,
   morningMaxTemperature: number | null,
   calculatedEveningTemp: number | null,
   eveningMinTemperature: number | null,
-  eveningMaxTemperature: number | null
+  eveningMaxTemperature: number | null,
+  addedByUserId: string, // ID of the user performing the action
+  addedByUserName: string | null // Name of the user performing the action
 ): Promise<string> => {
-  if (!userId) {
-    console.error("[firestoreService] addTemperatureLog called with no userId.");
-    throw new Error("User ID is required to add a temperature log.");
+  if (!ownerUserId) {
+    console.error("[firestoreService] addTemperatureLog called with no ownerUserId.");
+    throw new Error("Owner User ID is required to add a temperature log.");
+  }
+  if (!addedByUserId) {
+    console.error("[firestoreService] addTemperatureLog called with no addedByUserId.");
+    throw new Error("Adding User ID is required to add a temperature log.");
   }
   if (!date) {
     console.error("[firestoreService] addTemperatureLog called with no date.");
     throw new Error("Date is required to add a temperature log.");
   }
   console.log("[firestoreService] addTemperatureLog data received:", {
-    userId, date, calculatedMorningTemp, morningMinTemperature, morningMaxTemperature,
-    calculatedEveningTemp, eveningMinTemperature, eveningMaxTemperature
+    ownerUserId, date, calculatedMorningTemp, morningMinTemperature, morningMaxTemperature,
+    calculatedEveningTemp, eveningMinTemperature, eveningMaxTemperature, addedByUserId, addedByUserName
   });
 
   try {
-    const existingLog = await checkExistingLogForDate(userId, date);
+    const existingLog = await checkExistingLogForDate(ownerUserId, date);
     if (existingLog) {
-      console.log(`[firestoreService] Attempt to add duplicate log for date: ${date.toISOString()} by user ${userId}`);
+      console.log(`[firestoreService] Attempt to add duplicate log for date: ${date.toISOString()} by user ${addedByUserId} for owner ${ownerUserId}`);
       throw new Error("A temperature log for this date already exists. Please delete the existing log or choose a different date.");
     }
 
-    console.log(`[firestoreService] Adding new log for user ${userId} for date ${date.toISOString()}`);
-    const newLogRef = await addDoc(getTemperaturesCollectionRef(userId), {
-      userId,
-      date: Timestamp.fromDate(date), // Ensure date is a Firestore Timestamp
+    console.log(`[firestoreService] Adding new log for owner user ${ownerUserId} (added by ${addedByUserId}) for date ${date.toISOString()}`);
+    const newLogRef = await addDoc(getTemperaturesCollectionRef(ownerUserId), {
+      userId: ownerUserId, // Keep this as the owner for querying purposes
+      date: Timestamp.fromDate(date),
       morningTemperature: calculatedMorningTemp,
       morningMinTemperature,
       morningMaxTemperature,
       eveningTemperature: calculatedEveningTemp,
       eveningMinTemperature,
       eveningMaxTemperature,
-      createdAt: serverTimestamp(), // Firestore server-side timestamp
+      createdAt: serverTimestamp(),
+      addedByUserId,
+      addedByUserName,
     });
     console.log(`[firestoreService] Successfully added log with ID: ${newLogRef.id}`);
     return newLogRef.id;
   } catch (error) {
     console.error("[firestoreService] Error in addTemperatureLog:", error);
-    // Ensure the error is re-thrown so the form's catch block can handle it
     if (error instanceof Error) {
       throw error;
     } else {
@@ -104,7 +110,7 @@ export const addTemperatureLog = async (
 };
 
 export const getTemperatureLogsForMonth = async (userId: string, year: number, month: number): Promise<TemperatureLog[]> => {
-  const monthDate = new Date(year, month -1, 1); // month is 1-indexed
+  const monthDate = new Date(year, month -1, 1);
   const startDate = startOfDay(startOfMonth(monthDate));
   const endDate = endOfDay(endOfMonth(monthDate));
 
@@ -127,40 +133,51 @@ export const getTemperatureLogsForMonth = async (userId: string, year: number, m
     return logs;
   } catch (error) {
      console.error("[firestoreService] Error fetching logs for month:", error);
-     throw error; // Rethrow so UI can handle it
+     throw error;
   }
 };
 
 
-export const deleteTemperatureLog = async (userId: string, logId: string): Promise<void> => {
-  const logDocRef = doc(db, `users/${userId}/temperatures`, logId);
+export const deleteTemperatureLog = async (
+  ownerUserId: string,
+  logId: string,
+  deletedByUserId: string,
+  deletedByUserName: string | null
+): Promise<void> => {
+  if (!ownerUserId || !logId || !deletedByUserId) {
+    throw new Error("User ID, Log ID, and Deleting User ID are required for deletion.");
+  }
+  const logDocRef = doc(db, `users/${ownerUserId}/temperatures`, logId);
   const logDocSnap = await getDoc(logDocRef);
 
   if (logDocSnap.exists()) {
-    const logData = logDocSnap.data() as Omit<TemperatureLog, 'id' | 'createdAt'> & { createdAt?: Timestamp }; // createdAt might be pending write
+    const logData = logDocSnap.data() as Omit<TemperatureLog, 'id'>;
     const batch = writeBatch(db);
 
-    const deletedLogRef = doc(getDeletedTemperaturesCollectionRef(userId));
+    const deletedLogRef = doc(getDeletedTemperaturesCollectionRef(ownerUserId));
     batch.set(deletedLogRef, {
       ...logData,
-      // Ensure all fields from TemperatureLog are present, even if null
-      userId: logData.userId,
-      date: logData.date, // This is already a Timestamp
+      userId: logData.userId, // This is the ownerUserId
+      date: logData.date,
       morningTemperature: logData.morningTemperature !== undefined ? logData.morningTemperature : null,
       morningMinTemperature: logData.morningMinTemperature !== undefined ? logData.morningMinTemperature : null,
       morningMaxTemperature: logData.morningMaxTemperature !== undefined ? logData.morningMaxTemperature : null,
       eveningTemperature: logData.eveningTemperature !== undefined ? logData.eveningTemperature : null,
       eveningMinTemperature: logData.eveningMinTemperature !== undefined ? logData.eveningMinTemperature : null,
       eveningMaxTemperature: logData.eveningMaxTemperature !== undefined ? logData.eveningMaxTemperature : null,
-      createdAt: logData.createdAt || serverTimestamp(), // Use existing or new server timestamp
+      createdAt: logData.createdAt || serverTimestamp(),
+      addedByUserId: logData.addedByUserId,
+      addedByUserName: logData.addedByUserName,
       deletedAt: serverTimestamp(),
       originalLogId: logId,
+      deletedByUserId,
+      deletedByUserName,
     });
     batch.delete(logDocRef);
     await batch.commit();
-    console.log(`[firestoreService] Moved log ${logId} to deletedTemperatures`);
+    console.log(`[firestoreService] Moved log ${logId} to deletedTemperatures by user ${deletedByUserId}`);
   } else {
-    console.error(`[firestoreService] Log entry ${logId} not found for deletion.`);
+    console.error(`[firestoreService] Log entry ${logId} not found for deletion for owner ${ownerUserId}.`);
     throw new Error('Log entry not found.');
   }
 };
@@ -185,4 +202,3 @@ export const getAllTemperatureLogs = async (userId: string): Promise<Temperature
     ...docSnap.data(),
   } as TemperatureLog));
 };
-

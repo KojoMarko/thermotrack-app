@@ -4,7 +4,7 @@
 import React from 'react';
 import type { DeletedTemperatureLog } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
-import { ThermometerSun, ThermometerSnowflake, CalendarClock } from 'lucide-react';
+import { Thermometer, CalendarClock, User, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
 
 type DeletedTemperatureTableProps = {
@@ -36,16 +36,18 @@ export default function DeletedTemperatureTable({ logs, isLoading }: DeletedTemp
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[150px]">Original Date</TableHead>
-            <TableHead className="text-center">Morning (°C)</TableHead>
-            <TableHead className="text-center">Evening (°C)</TableHead>
-            <TableHead className="text-right w-[180px]">Deleted On</TableHead>
+            <TableHead className="w-[150px]"><CalendarDays className="inline-block mr-1 h-4 w-4"/>Original Date</TableHead>
+            <TableHead className="text-center"><Thermometer className="inline-block mr-1 h-4 w-4 text-orange-500"/>Morning (°C)</TableHead>
+            <TableHead className="text-center"><Thermometer className="inline-block mr-1 h-4 w-4 text-blue-500"/>Evening (°C)</TableHead>
+            <TableHead><User className="inline-block mr-1 h-4 w-4"/>Added By</TableHead>
+            <TableHead><User className="inline-block mr-1 h-4 w-4 text-destructive"/>Deleted By</TableHead>
+            <TableHead className="text-right w-[180px]"><CalendarClock className="inline-block mr-1 h-4 w-4"/>Deleted On</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {logs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                 No deleted logs found.
               </TableCell>
             </TableRow>
@@ -54,22 +56,15 @@ export default function DeletedTemperatureTable({ logs, isLoading }: DeletedTemp
               <TableRow key={log.id}>
                 <TableCell className="font-medium">{format(log.date.toDate(), 'MMM dd, yyyy')}</TableCell>
                 <TableCell className="text-center">
-                  <span className="flex items-center justify-center">
-                    {log.morningTemperature !== null && <ThermometerSun className="h-4 w-4 mr-1 text-orange-400" />}
-                    {formatTempWithRange(log.morningTemperature, log.morningMinTemperature, log.morningMaxTemperature)}
-                  </span>
+                  {formatTempWithRange(log.morningTemperature, log.morningMinTemperature, log.morningMaxTemperature)}
                 </TableCell>
                 <TableCell className="text-center">
-                  <span className="flex items-center justify-center">
-                    {log.eveningTemperature !== null && <ThermometerSnowflake className="h-4 w-4 mr-1 text-blue-400" />}
-                    {formatTempWithRange(log.eveningTemperature, log.eveningMinTemperature, log.eveningMaxTemperature)}
-                  </span>
+                  {formatTempWithRange(log.eveningTemperature, log.eveningMinTemperature, log.eveningMaxTemperature)}
                 </TableCell>
+                <TableCell>{log.addedByUserName || log.addedByUserId}</TableCell>
+                <TableCell>{log.deletedByUserName || log.deletedByUserId}</TableCell>
                 <TableCell className="text-right">
-                  <span className="flex items-center justify-end">
-                    <CalendarClock className="h-4 w-4 mr-1 text-muted-foreground" />
-                    {log.deletedAt ? format(log.deletedAt.toDate(), 'MMM dd, yyyy HH:mm') : 'N/A'}
-                  </span>
+                  {log.deletedAt ? format(log.deletedAt.toDate(), 'MMM dd, yyyy HH:mm') : 'N/A'}
                 </TableCell>
               </TableRow>
             ))
